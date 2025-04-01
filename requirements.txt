@@ -3,4 +3,4 @@ plotly
 fpdf  
 matplotlib  
 numpy  
-streamlit  
+streamlit
