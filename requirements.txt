@@ -4,3 +4,4 @@ fpdf
 matplotlib  
 numpy  
 streamlit
+kaleido
