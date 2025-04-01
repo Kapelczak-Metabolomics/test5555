@@ -1,25 +1,13 @@
-import subprocess  
-import sys  
+# Make sure that the required packages are installed:  
+# pyopenms, plotly, fpdf, matplotlib, numpy, streamlit  
+# For example, your requirements.txt should include:  
+# pyopenms  
+# plotly  
+# fpdf  
+# matplotlib  
+# numpy  
+# streamlit  
   
-# Function to install required packages if not already available  
-def install_packages():  
-    packages = [  
-        "pyopenms",  
-        "plotly",  
-        "fpdf",  
-        "matplotlib",  
-        "numpy",  
-        "streamlit"  
-    ]  
-    for package in packages:  
-        try:  
-            __import__(package)  
-        except ImportError:  
-            subprocess.check_call([sys.executable, "-m", "pip", "install", package])  
-  
-install_packages()  
-  
-# Now import the required packages  
 import streamlit as st  
 import io  
 import numpy as np  
@@ -55,7 +43,6 @@ def find_contaminants(experiment, contaminant_targets=[(391.2843, "Polymer Conta
     contaminant_hits = []  
     spec_index = 0  
     for spec in experiment.getSpectra():  
-        # get_peaks() returns a tuple of arrays (m/z, intensity)  
         peaks = spec.get_peaks() or ([], [])  
         mz_array, intensity_array = peaks  
         mz_array = np.array(mz_array)  
@@ -64,109 +51,86 @@ def find_contaminants(experiment, contaminant_targets=[(391.2843, "Polymer Conta
             indices = np.where(np.abs(mz_array - target_mz) <= tolerance)[0]  
             for idx in indices:  
                 contaminant_hits.append({  
-                    "Spectrum": spec_index,  
-                    "Contaminant": desc,  
-                    "Observed m/z": float(mz_array[idx]),  
-                    "Intensity": float(intensity_array[idx])  
+                    'Spectrum': spec_index,  
+                    'Contaminant': desc,  
+                    'Observed m/z': float(mz_array[idx]),  
+                    'Intensity': float(intensity_array[idx])  
                 })  
         spec_index += 1  
     return contaminant_hits  
   
 def plot_contaminants(contaminant_hits):  
     """  
-    Creates an interactive Plotly bar chart summarizing the number of hits per contaminant type.  
-    Returns the Plotly figure.  
+    Creates an interactive Plotly bar chart summarizing contaminant hits.  
+    The x-axis represents unique contaminants; the y-axis shows count of hits.  
     """  
     if not contaminant_hits:  
         return None  
-    # Count the hits by contaminant type  
-    counts = {}  
+      
+    # Aggregate counts per contaminant type  
+    contaminants = {}  
     for hit in contaminant_hits:  
         key = hit["Contaminant"]  
-        counts[key] = counts.get(key, 0) + 1  
-    contaminants = list(counts.keys())  
-    hit_counts = list(counts.values())  
-      
-    fig = go.Figure(data=[go.Bar(x=contaminants, y=hit_counts, marker_color="#2563EB")])  
-      
+        contaminants[key] = contaminants.get(key, 0) + 1  
+  
+    fig = go.Figure(data=[go.Bar(  
+        x=list(contaminants.keys()),  
+        y=list(contaminants.values()),  
+        marker_color="#2563EB"  # Julius Blue  
+    )])  
     fig.update_layout(  
         title="Contaminant Hit Counts",  
         xaxis_title="Contaminant Type",  
-        yaxis_title="Number of Hits",  
-        title_font=dict(size=20, color="#171717"),  
-        xaxis=dict(title_font=dict(size=16, color="#171717"), tickfont=dict(size=14, color="#171717")),  
-        yaxis=dict(title_font=dict(size=16, color="#171717"), tickfont=dict(size=14, color="#171717")),  
+        yaxis_title="Hit Count",  
         plot_bgcolor="#FFFFFF",  
+        xaxis=dict(showgrid=False),  
+        yaxis=dict(showgrid=True, gridcolor="#F3F4F6")  
     )  
     return fig  
   
 def generate_pdf_report(contaminant_hits, total_spectra, plot_filename):  
     """  
-    Generates a PDF report summarizing the mzXML processing.  
-    The report includes a summary, a table of contaminant hits, and the visualization.  
-    Returns the filename of the generated PDF.  
+    Generates a PDF report using fpdf.  
+    The report includes a summary, a table of contaminant hits, and the provided visualization.  
     """  
-    class PDFReport(FPDF):  
-        def header(self):  
-            self.set_font("Arial", "B", 16)  
-            self.cell(0, 10, "mzXML Contaminant Analysis Report", ln=True, align="C")  
-            self.ln(10)  
-          
-        def chapter_title(self, title):  
-            self.set_font("Arial", "B", 14)  
-            self.set_text_color(23, 23, 23)  
-            self.cell(0, 10, title, ln=True)  
-            self.ln(5)  
-          
-        def chapter_body(self, body):  
-            self.set_font("Arial", "", 12)  
-            self.set_text_color(23, 23, 23)  
-            self.multi_cell(0, 10, body)  
-            self.ln(5)  
-      
-    pdf = PDFReport()  
+    pdf = FPDF()  
     pdf.add_page()  
+    pdf.set_font("Arial", "B", 16)  
+    pdf.cell(0, 10, "mzXML Analysis Report", ln=True)  
       
-    # Summary  
-    summary = "Total spectra parsed: " + str(total_spectra) + "\n"  
-    summary += "Total contaminant hits: " + str(len(contaminant_hits)) + "\n"  
-    pdf.chapter_title("Analysis Summary")  
-    pdf.chapter_body(summary)  
+    pdf.set_font("Arial", "", 12)  
+    summary = f"Total spectra parsed: {total_spectra}\nTotal contaminant hits: {len(contaminant_hits)}\n"  
+    pdf.multi_cell(0, 10, summary)  
       
-    # Contaminant table  
-    pdf.chapter_title("Contaminant Hits")  
+    pdf.ln(5)  
+    pdf.set_font("Arial", "B", 14)  
+    pdf.cell(0, 10, "Contaminant Hits Details:", ln=True)  
+    pdf.set_font("Arial", "", 10)  
+      
     if contaminant_hits:  
-        # Table header  
-        header = "Spec | Contaminant | Observed m/z | Intensity"  
-        pdf.set_font("Courier", "", 10)  
+        # Add table header  
+        header = "Spectrum | Contaminant | Observed m/z | Intensity"  
         pdf.multi_cell(0, 8, header)  
-        # Table rows  
         for hit in contaminant_hits:  
-            row = (  
-                str(hit["Spectrum"]) + " | " +  
-                str(hit["Contaminant"]) + " | " +  
-                f'{hit["Observed m/z"]:.4f}' + " | " +  
-                f'{hit["Intensity"]:.2f}'  
-            )  
+            row = f"{hit['Spectrum']} | {hit['Contaminant']} | {hit['Observed m/z']:.4f} | {hit['Intensity']:.2f}"  
             pdf.multi_cell(0, 8, row)  
     else:  
-        pdf.chapter_body("No contaminant hits identified.")  
+        pdf.multi_cell(0, 10, "No contaminant hits were identified.")  
       
-    # Add visualization if available  
+    pdf.ln(5)  
     if os.path.exists(plot_filename):  
-        pdf.chapter_title("Visualization")  
+        pdf.set_font("Arial", "B", 14)  
+        pdf.cell(0, 10, "Visualization:", ln=True)  
         pdf.image(plot_filename, w=pdf.w - 40)  
       
-    pdf_filename = "mzxml_analysis_report.pdf"  
-    pdf.output(pdf_filename)  
-    return pdf_filename  
+    output_pdf = "mzxml_analysis_report.pdf"  
+    pdf.output(output_pdf)  
+    return output_pdf  
   
-# --- Streamlit App ---  
+# --- Streamlit App Interface ---  
+st.title("mzXML Contaminant Analysis App")  
   
-st.title("mzXML Contaminant Analysis with pyopenms")  
-  
-uploaded_file = st.file_uploader("Upload an mzXML file", type="mzXML")  
-  
+uploaded_file = st.file_uploader("Upload an mzXML file", type=["mzXML"])  
 if uploaded_file is not None:  
     try:  
         st.info("Loading mzXML file...")  
@@ -183,7 +147,7 @@ if uploaded_file is not None:
         if fig is not None:  
             st.plotly_chart(fig, use_container_width=True)  
           
-        # Save visualization as image for PDF report  
+        # Save the Plotly figure as an image for inclusion in the PDF report  
         plot_filename = "contaminant_peaks.png"  
         if fig is not None:  
             import plotly.io as pio  
