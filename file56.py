@@ -9,34 +9,84 @@ import tempfile
 import os  
 from datetime import datetime  
   
-# ---------------- Custom PDF Class with Footer ---------------- #  
+# ---------------- Custom PDF Class with Modern Table Styling ---------------- #  
 class PDF(FPDF):  
+    def __init__(self):  
+        super().__init__()  
+        # Color definitions  
+        self.header_color = (37, 99, 235)     # Blue header background  
+        self.text_color = (31, 41, 55)        # Dark gray text  
+        self.light_gray = (243, 244, 246)     # Light gray for alternating rows  
+        self.white = (255, 255, 255)          # White background  
+        self.border_color = (209, 213, 219)   # Border color  
+  
     def header(self):  
-        # Title centered in the header  
+        # Header title  
         self.set_font("Arial", "B", 16)  
+        self.set_text_color(*self.text_color)  
         self.cell(0, 10, "Contaminant Analysis Report", ln=1, align="C")  
         self.ln(5)  
-      
+  
     def footer(self):  
-        # Position at 15 mm from bottom  
+        # Footer with text and logo  
         self.set_y(-15)  
-        # Set font for footer  
         self.set_font("Arial", "I", 8)  
-        # Footer text on the left  
+        self.set_text_color(*self.text_color)  
         footer_text = "2025 Kapelczak Metabolomics  |  Page " + str(self.page_no())  
         self.cell(0, 10, footer_text, 0, 0, "L")  
-        # Logo in the right corner  
         if os.path.exists("kap (1).png"):  
-            # Adjust x position to be at the right edge (width minus logo width and margin)  
             self.image("kap (1).png", x=self.w - 25, y=self.get_y() - 3, w=15)  
+  
+    def create_modern_table(self, header, data, col_widths=None):  
+        """Creates a modern table with colored header and alternating rows"""  
+        if col_widths is None:  
+            col_widths = [40] * len(header)  
+          
+        # Center the table  
+        total_width = sum(col_widths)  
+        start_x = (self.w - total_width) / 2  
+        self.set_x(start_x)  
+          
+        # Header row  
+        self.set_fill_color(*self.header_color)  
+        self.set_text_color(255, 255, 255)  
+        self.set_font("Arial", "B", 10)  
+        self.set_line_width(0.3)  
+          
+        for i, col_name in enumerate(header):  
+            self.cell(col_widths[i], 10, col_name, 1, 0, "C", True)  
+        self.ln()  
+          
+        # Data rows with alternating colors  
+        self.set_text_color(*self.text_color)  
+        self.set_font("Arial", "", 10)  
+          
+        for i, row in enumerate(data):  
+            # Set background color (alternating)  
+            if i % 2 == 0:  
+                self.set_fill_color(*self.white)  
+            else:  
+                self.set_fill_color(*self.light_gray)  
+              
+            # Reset x position for each row  
+            self.set_x(start_x)  
+              
+            for j, cell_value in enumerate(row):  
+                # Format cell value as string  
+                if isinstance(cell_value, (int, float)):  
+                    cell_text = str(cell_value)  
+                else:  
+                    cell_text = cell_value  
+                  
+                # Align numbers to center, text to left  
+                align = "C" if isinstance(cell_value, (int, float)) else "L"  
+                self.cell(col_widths[j], 8, cell_text, 1, 0, align, True)  
+              
+            self.ln()  
   
 # ---------------- Function Definitions ---------------- #  
 def load_mzxml(file_bytes):  
-    """  
-    Loads an mzXML file using pyopenms.  
-    The file is temporarily written to disk so that pyopenms can read it.  
-    Returns an MSExperiment object.  
-    """  
+    """Loads an mzXML file using pyopenms"""  
     exp = MSExperiment()  
     mzxml_file = MzXMLFile()  
     file_stream = io.BytesIO(file_bytes.read())  
@@ -48,60 +98,57 @@ def load_mzxml(file_bytes):
     return exp  
   
 def find_contaminants(experiment, contaminant_categories=None, tolerance=0.5):  
-    """  
-    Searches for contaminants in the experiment by comparing m/z values to target values.  
-    Returns a list of dictionaries for each hit with category, m/z, intensity, etc.  
-    """  
+    """Searches for contaminants in the experiment"""  
     if contaminant_categories is None:  
         contaminant_categories = CONTAMINANT_CATEGORIES  
       
     contaminant_hits = []  
       
     for spec_index, spectrum in enumerate(experiment.getSpectra()):  
-        if spectrum.getMSLevel() != 1:  # Only process MS1 spectra  
-            continue  
-          
-        mz_array = spectrum.get_peaks()[0]  
-        intensity_array = spectrum.get_peaks()[1]  
-          
-        for category, targets in contaminant_categories.items():  
-            for target_mz, description in targets:  
-                # Find peaks within tolerance of target m/z  
-                matches = np.where(np.abs(mz_array - target_mz) <= tolerance)[0]  
-                  
-                for match_idx in matches:  
-                    contaminant_hits.append({  
-                        "Category": category,  
-                        "Description": description,  
-                        "Target_mz": target_mz,  
-                        "Observed_mz": mz_array[match_idx],  
-                        "Intensity": intensity_array[match_idx],  
-                        "Spectrum": spec_index,  
-                        "Error_ppm": (mz_array[match_idx] - target_mz) / target_mz * 1e6  
-                    })  
+        for category, contaminants in contaminant_categories.items():  
+            for target_mz, contaminant_name in contaminants:  
+                for peak_index, mz in enumerate(spectrum.get_peaks()[0]):  
+                    if abs(mz - target_mz) <= tolerance:  
+                        intensity = spectrum.get_peaks()[1][peak_index]  
+                        contaminant_hits.append({  
+                            "category": category,  
+                            "contaminant": contaminant_name,  
+                            "target_mz": target_mz,  
+                            "observed_mz": mz,  
+                            "intensity": intensity,  
+                            "spectrum_index": spec_index,  
+                            "peak_index": peak_index  
+                        })  
       
     return contaminant_hits  
   
 def generate_contaminant_summary(hits):  
-    """  
-    Generates a summary DataFrame with counts by contaminant category.  
-    """  
+    """Generates a summary DataFrame of contaminant hits by category"""  
     if not hits:  
-        return pd.DataFrame(columns=["Category", "Hits", "Total_Intensity"])  
+        return pd.DataFrame(columns=["Category", "Hits"])  
       
-    df = pd.DataFrame(hits)  
-    summary = df.groupby("Category").agg(  
-        Hits=("Category", "count"),  
-        Total_Intensity=("Intensity", "sum")  
-    ).reset_index()  
+    # Count hits by category  
+    category_counts = {}  
+    for hit in hits:  
+        category = hit["category"]  
+        if category in category_counts:  
+            category_counts[category] += 1  
+        else:  
+            category_counts[category] = 1  
       
-    return summary  
+    # Create DataFrame  
+    summary_df = pd.DataFrame({  
+        "Category": list(category_counts.keys()),  
+        "Hits": list(category_counts.values())  
+    })  
+      
+    # Sort by hit count (descending)  
+    summary_df = summary_df.sort_values("Hits", ascending=False).reset_index(drop=True)  
+      
+    return summary_df  
   
 def plot_contaminant_summary(summary_df):  
-    """  
-    Creates a bar chart showing contaminant counts by category.  
-    Returns a Plotly figure object.  
-    """  
+    """Creates a bar chart of contaminant counts by category"""  
     if summary_df.empty:  
         return None  
       
@@ -109,16 +156,16 @@ def plot_contaminant_summary(summary_df):
         summary_df,  
         x="Category",  
         y="Hits",  
-        color="Total_Intensity",  
-        labels={"Category": "Contaminant Category", "Hits": "Number of Hits"},  
-        title="Contaminant Hits by Category",  
-        color_continuous_scale="Viridis"  
+        title="Contaminant Counts by Category",  
+        color="Hits",  
+        color_continuous_scale="Blues",  
+        template="plotly_white"  
     )  
       
     fig.update_layout(  
         xaxis_title="Contaminant Category",  
         yaxis_title="Number of Hits",  
-        coloraxis_colorbar_title="Total Intensity",  
+        coloraxis_showscale=False,  
         height=600,  
         width=800  
     )  
@@ -126,63 +173,50 @@ def plot_contaminant_summary(summary_df):
     return fig  
   
 def generate_pdf_report(hits, total_spectra, plot_filename):  
-    """  
-    Generates a PDF report with:  
-    - Date and total spectra processed  
-    - Summary table with counts per contaminant category  
-    - The exported contamination graph  
-    - Footer with logo and text  
-    Returns the filename of the generated PDF.  
-    """  
+    """Generates a PDF report with contaminant analysis results"""  
     pdf = PDF()  
     pdf.add_page()  
       
-    # Date and summary info  
-    pdf.set_font("Arial", "", 12)  
-    pdf.cell(0, 10, f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", ln=1)  
-    pdf.cell(0, 10, f"Total Spectra Processed: {total_spectra}", ln=1)  
+    # Add report metadata  
+    pdf.set_font("Arial", "B", 12)  
+    pdf.cell(0, 10, "Analysis Details:", ln=1)  
+    pdf.set_font("Arial", "", 10)  
+    pdf.cell(0, 8, "Date: " + datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ln=1)  
+    pdf.cell(0, 8, "Total Spectra Analyzed: " + str(total_spectra), ln=1)  
+    pdf.cell(0, 8, "Total Contaminants Found: " + str(len(hits)), ln=1)  
     pdf.ln(5)  
       
-    # Summary table - adjusted column widths for better fit  
+    # Add contaminant summary table  
+    pdf.set_font("Arial", "B", 12)  
+    pdf.cell(0, 10, "Contaminant Summary (Counts by Category):", ln=1)  
+      
+    # Create summary dataframe  
     summary_df = generate_contaminant_summary(hits)  
     if not summary_df.empty:  
-        pdf.set_font("Arial", "B", 12)  
-        pdf.cell(0, 10, "Contaminant Summary (Counts by Category):", ln=1)  
-          
-        # Table header with adjusted widths  
-        pdf.set_font("Arial", "B", 10)  
-        pdf.cell(100, 10, "Category", 1)  
-        pdf.cell(30, 10, "Hits", 1, ln=1, align="C")  
-          
-        # Table content  
-        pdf.set_font("Arial", "", 10)  
-        for _, row in summary_df.iterrows():  
-            pdf.cell(100, 10, str(row["Category"]), 1)  
-            pdf.cell(30, 10, str(row["Hits"]), 1, ln=1, align="C")  
+        header = ["Category", "Hits"]  
+        data = summary_df.values.tolist()  
+        col_widths = [120, 40]  
+        pdf.create_modern_table(header, data, col_widths=col_widths)  
     else:  
         pdf.cell(0, 10, "No contaminants detected.", ln=1)  
       
-    # Add graph on a new page with proper sizing  
+    # Add graph on a new page  
     if os.path.exists(plot_filename):  
         pdf.add_page()  
         pdf.set_font("Arial", "B", 14)  
         pdf.cell(0, 10, "Contaminant Counts Graph", ln=1, align="C")  
-          
-        # Calculate dimensions to fit the graph properly  
-        page_width = pdf.w - 40  # 20mm margins on each side  
-        page_height = 120  # Reasonable height that won't get cut off  
-          
-        # Center the image horizontally  
-        x_position = (pdf.w - page_width) / 2  
-          
-        # Position the image with enough space from the top  
-        pdf.image(plot_filename, x=x_position, y=40, w=page_width, h=page_height)  
+        pdf.ln(5)  
+        # Position the graph with margins  
+        graph_width = pdf.w - 60  
+        graph_x = 30  
+        graph_y = pdf.get_y() + 10  
+        pdf.image(plot_filename, x=graph_x, y=graph_y, w=graph_width)  
       
     pdf_file = "Contaminant_Analysis_Report.pdf"  
     pdf.output(pdf_file)  
     return pdf_file  
   
-# ---------------- 15 Contaminant Categories ---------------- #  
+# ---------------- Contaminant Categories Definition ---------------- #  
 CONTAMINANT_CATEGORIES = {  
     "Polymers": [(391.2843, "PEG/PPG"), (429.0887, "Polysiloxane")],  
     "Detergents": [(311.2843, "Triton X"), (522.3554, "Tween")],  
@@ -222,7 +256,6 @@ if uploaded_file is not None:
         fig = plot_contaminant_summary(summary_df)  
         if fig:  
             st.plotly_chart(fig, use_container_width=True)  
-            # Save figure as an image with sufficient resolution  
             plot_path = "contaminant_plot.png"  
             fig.write_image(plot_path, width=800, height=600, scale=2)  
               
