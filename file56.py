@@ -1,4 +1,4 @@
-# Complete code for the Contaminant Analysis application  
+# Fixed version of the Contaminant Analysis application  
   
 import streamlit as st  
 import io  
@@ -15,15 +15,17 @@ class PDF(FPDF):
     def __init__(self):  
         super().__init__()  
         # Color definitions stored as individual RGB components  
-        self.header_color_r, self.header_color_g, self.header_color_b = 37, 99, 235  # Blue header  
-        self.text_color_r, self.text_color_g, self.text_color_b = 31, 41, 55         # Dark gray text  
-        self.light_gray_r, self.light_gray_g, self.light_gray_b = 243, 244, 246      # Light gray for alternating rows  
-        self.border_color_r, self.border_color_g, self.border_color_b = 209, 213, 219  # Border color  
+        self.header_color = (37, 99, 235)  # Blue header  
+        self.text_color = (31, 41, 55)     # Dark gray text  
+        self.light_gray = (243, 244, 246)  # Light gray for alternating rows  
+        self.border_color = (209, 213, 219)  # Border color  
   
     def header(self):  
         # Header title  
         self.set_font("Arial", "B", 16)  
-        self.set_text_color(self.text_color_r, self.text_color_g, self.text_color_b)  
+        # Unpack RGB values when calling set_text_color  
+        r, g, b = self.text_color  
+        self.set_text_color(r, g, b)  
         self.cell(0, 10, "Contaminant Analysis Report", ln=1, align="C")  
         self.ln(5)  
   
@@ -31,7 +33,9 @@ class PDF(FPDF):
         # Footer with left-aligned text and logo on the right corner  
         self.set_y(-15)  
         self.set_font("Arial", "I", 8)  
-        self.set_text_color(self.text_color_r, self.text_color_g, self.text_color_b)  
+        # Unpack RGB values when calling set_text_color  
+        r, g, b = self.text_color  
+        self.set_text_color(r, g, b)  
         footer_text = "2025 Kapelczak Metabolomics  |  Page " + str(self.page_no())  
         self.cell(0, 10, footer_text, 0, 0, "L")  
         if os.path.exists("kap (1).png"):  
@@ -52,8 +56,9 @@ class PDF(FPDF):
         start_x = (self.w - total_width) / 2  
         self.set_x(start_x)  
           
-        # Header row  
-        self.set_fill_color(self.header_color_r, self.header_color_g, self.header_color_b)  
+        # Header row - unpack RGB values  
+        r, g, b = self.header_color  
+        self.set_fill_color(r, g, b)  
         self.set_text_color(255, 255, 255)  # White text for header  
         self.set_font("Arial", "B", 10)  
         self.set_line_width(0.3)  
@@ -63,7 +68,8 @@ class PDF(FPDF):
         self.ln()  
           
         # Data rows with alternating colors  
-        self.set_text_color(self.text_color_r, self.text_color_g, self.text_color_b)  
+        r, g, b = self.text_color  
+        self.set_text_color(r, g, b)  
         self.set_font("Arial", "", 10)  
           
         row_counter = 0  
@@ -72,7 +78,8 @@ class PDF(FPDF):
             if row_counter % 2 == 0:  
                 self.set_fill_color(255, 255, 255)  # White  
             else:  
-                self.set_fill_color(self.light_gray_r, self.light_gray_g, self.light_gray_b)  # Light gray  
+                r, g, b = self.light_gray  
+                self.set_fill_color(r, g, b)  # Light gray  
               
             # Reset x position for each row  
             self.set_x(start_x)  
@@ -191,7 +198,9 @@ def generate_pdf_report(hits, total_spectra, plot_filename):
       
     # Add report date and time  
     pdf.set_font("Arial", "", 10)  
-    pdf.set_text_color(pdf.text_color_r, pdf.text_color_g, pdf.text_color_b)  
+    # Unpack RGB values when calling set_text_color  
+    r, g, b = pdf.text_color  
+    pdf.set_text_color(r, g, b)  
     report_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  
     pdf.cell(0, 10, "Report Generated: " + report_date, ln=1)  
       
